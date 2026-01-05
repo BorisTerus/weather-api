@@ -1,0 +1,15 @@
+spring:
+  application:
+    name=weather-api
+  cache:
+    type: redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+city:
+  search:
+    api: https://nominatim.openstreetmap.org
+  weather:
+    api: https://api.open-meteo.com/v1/forecast
