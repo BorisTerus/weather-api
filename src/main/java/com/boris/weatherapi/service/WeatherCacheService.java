@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
+
 @Service
 @RequiredArgsConstructor
 public class WeatherCacheService {
@@ -18,7 +20,9 @@ public class WeatherCacheService {
     )
     public WeatherResponseDto getWeather(String city) {
         var citySearch = externalApiService.fetchLatitudeAndLongitude(city);
-        var cityWeather = externalApiService.fetchWeather(citySearch.lat(), citySearch.lon());
-        return cityWeather.currentWeather();
+        var cityWeather = citySearch.flatMap(c -> externalApiService
+                .fetchWeather(c.lat(), c.lon()));
+
+        return Objects.requireNonNull(cityWeather.block()).currentWeather();
     }
 }

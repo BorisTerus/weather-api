@@ -11,10 +11,17 @@ import java.util.Map;
 @RestControllerAdvice
 public class RateLimitHandler {
 
-    @ExceptionHandler(RequestNotPermitted.class)
-    public ResponseEntity<Map<String, String>> handleRateLimit(RequestNotPermitted ex) {
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<Map<String, String>> handleRateLimit(TooManyRequestsException ex) {
         Map<String, String> body = Map.of("message", "Rate limit exceeded. Try again after 1 minute.");
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(body);
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
+        Map<String, String> body = Map.of("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(body);
     }
 }

@@ -1,7 +1,5 @@
 package com.boris.weatherapi.config;
 
-import io.github.resilience4j.ratelimiter.RateLimiter;
-import io.github.resilience4j.ratelimiter.RateLimiterConfig;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,16 +28,6 @@ public class RedisConfig {
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)
                 .build();
-    }
-
-    @Bean
-    public RateLimiter weatherRateLimiter() {
-        RateLimiterConfig config = RateLimiterConfig.custom()
-                .limitForPeriod(5)
-                .limitRefreshPeriod(Duration.ofMinutes(1))
-                .timeoutDuration(Duration.ZERO)
-                .build();
-        return RateLimiter.of("weatherLimiter", config);
     }
 
 }

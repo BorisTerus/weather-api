@@ -4,7 +4,6 @@ import com.boris.weatherapi.dto.CitySearchDto;
 import com.boris.weatherapi.dto.CityWeatherDto;
 import com.boris.weatherapi.dto.WeatherResponseDto;
 import com.boris.weatherapi.service.ExternalApiService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Mono;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -32,13 +32,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class WeatherApiApplicationTests {
 
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
     @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
             .withExposedPorts(6379);
 
-    // Override spring.redis properties to point to Testcontainers Redis
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.redis.host", redis::getHost);
@@ -54,15 +51,6 @@ class WeatherApiApplicationTests {
     @Autowired
     private RedisCacheManager cacheManager;
 
-    @BeforeEach
-    void beforeEach() {
-        when(externalApiService.fetchLatitudeAndLongitude(anyString()))
-                .thenReturn(new CitySearchDto("1", "2"));
-        when(externalApiService.fetchWeather(anyString(), anyString()))
-                .thenReturn(new CityWeatherDto(getWeatherResponse()));
-
-    }
-
     private WeatherResponseDto getWeatherResponse() {
         return new WeatherResponseDto(1d, 2d, "N");
     }
@@ -71,7 +59,11 @@ class WeatherApiApplicationTests {
     @SneakyThrows
     @Order(1)
     void should_Succeed_AndCacheWeather() {
-
+        //Arrange
+        when(externalApiService.fetchLatitudeAndLongitude(anyString()))
+                .thenReturn(Mono.just(new CitySearchDto("1", "2")));
+        when(externalApiService.fetchWeather(anyString(), anyString()))
+                .thenReturn(Mono.just(new CityWeatherDto(getWeatherResponse())));
         //Act
         mockMvc.perform(get("/weather?city=London")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -87,6 +79,28 @@ class WeatherApiApplicationTests {
                 () -> Assertions.assertEquals(londonWeather.windspeed(), getWeatherResponse().windspeed()),
                 () -> Assertions.assertEquals(londonWeather.winddirection(), getWeatherResponse().winddirection())
         );
+    }
+
+    @Test
+    @Order(2)
+    @SneakyThrows
+    void should_Fail_WhenRateLimitExceeded() {
+        //Arrange
+        when(externalApiService.fetchLatitudeAndLongitude(anyString()))
+                .thenReturn(Mono.just(new CitySearchDto("1", "2")));
+        when(externalApiService.fetchWeather(anyString(), anyString()))
+                .thenReturn(Mono.just(new CityWeatherDto(getWeatherResponse())));
+        for (int i = 1; i <= 5; i++) {
+            mockMvc.perform(get("/weather")
+                            .param("city", "London")
+                            .header("USER-ID", "test1"))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(get("/weather")
+                        .param("city", "London")
+                        .header("USER-ID", "test1"))
+                .andExpect(status().isTooManyRequests());
     }
 
 }

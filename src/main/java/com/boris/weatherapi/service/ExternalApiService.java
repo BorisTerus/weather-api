@@ -19,50 +19,42 @@ public class ExternalApiService {
     private final WebClient webClient;
     private final CityPropertiesConfig cityPropertiesConfig;
 
-    public CitySearchDto fetchLatitudeAndLongitude(String cityName) {
+    public Mono<CitySearchDto> fetchLatitudeAndLongitude(String cityName) {
         var url = "%s?q=%s&format=json".formatted(cityPropertiesConfig.getSearchApi(), cityName);
 
-        try {
-            return Objects.requireNonNull(webClient.get()
-                            .uri(url)
-                            .retrieve()
-                            .onStatus(
-                                    status -> !status.is2xxSuccessful(),
-                                    clientResponse -> clientResponse.bodyToMono(String.class)
-                                            .flatMap(body -> Mono.error(new RuntimeException("HTTP Error: " + body)))
-                            )
-                            .bodyToFlux(CitySearchDto.class)
-                            .collectList()
-                            .block())
-                    .getFirst();
-
-        } catch (Exception e) {
-            log.error("Unexpected error calling external API for city {}: {}", cityName, e.getMessage());
-            throw new RuntimeException("External API call failed.", e);
-        }
+        return (webClient.get()
+                        .uri(url)
+                        .retrieve()
+                        .onStatus(
+                                status -> !status.is2xxSuccessful(),
+                                clientResponse -> clientResponse.bodyToMono(String.class)
+                                        .flatMap(body -> Mono.error(new RuntimeException("HTTP Error: " + body)))
+                        )
+                )
+                .bodyToFlux(CitySearchDto.class)
+                .next()
+                .switchIfEmpty(Mono.error(
+                        new RuntimeException("No city found for " + cityName)
+                ))
+                .doOnError(e ->
+                        log.error("City search failed for {}: {}", cityName, e.getMessage())
+                );
     }
 
-    public CityWeatherDto fetchWeather(String latitude, String longitude) {
+    public Mono<CityWeatherDto> fetchWeather(String latitude, String longitude) {
         var url = "%s?latitude=%s&longitude=%s&current_weather=true"
                 .formatted(cityPropertiesConfig.getWeatherApi(), latitude, longitude);
         log.info("Fetching weather for city {}: {}", latitude, longitude);
-        try {
 
-            return webClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .onStatus(
-                            status -> !status.is2xxSuccessful(),
-                            clientResponse -> clientResponse.bodyToMono(String.class)
-                                    .flatMap(body -> Mono.error(new RuntimeException("HTTP Error: " + body)))
-                    )
-                    .bodyToMono(CityWeatherDto.class)
-                    .block();
-
-        } catch (Exception e) {
-            log.error("Unexpected error calling external API {}", e.getMessage());
-            throw new RuntimeException("External API call failed.", e);
-        }
+        return webClient.get()
+                .uri(url)
+                .retrieve()
+                .onStatus(
+                        status -> !status.is2xxSuccessful(),
+                        clientResponse -> clientResponse.bodyToMono(String.class)
+                                .flatMap(body -> Mono.error(new RuntimeException("HTTP Error: " + body)))
+                )
+                .bodyToMono(CityWeatherDto.class);
     }
 
 }
